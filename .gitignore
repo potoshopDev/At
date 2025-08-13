@@ -12,6 +12,9 @@ _deps
 CMakeUserPresets.json
 ./build
 ./chromedriver-win64
+build
+chromedriver-win64
+
 
 # CLion
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

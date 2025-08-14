@@ -10,6 +10,14 @@
 #include <vector>
 #include <sstream>
 
+#include <map>
+#include <functional>
+
+#include <ranges>
+#include <print>
+
+#include <unordered_map>
+
 using json = nlohmann::json;
 
 
@@ -140,7 +148,7 @@ std::vector<Command> LoadScript(const std::string& filename) {
 	return commands;
 }
 
-void Navigate(const std::string seleniumUrl, const std::string sessionId, const std::string targetUrl, const int timeout_ms = 10000)
+void Navigate(const std::string& seleniumUrl, const std::string& sessionId, const std::string& targetUrl, const int timeout_ms = 10000)
 {
 	PostJson(seleniumUrl + "/session/" + sessionId + "/url",
 		{ {"url", targetUrl} });
@@ -148,7 +156,7 @@ void Navigate(const std::string seleniumUrl, const std::string sessionId, const 
 	WaitForPageLoad(seleniumUrl, sessionId, timeout_ms);
 }
 
-std::string FindElementByXPath(const std::string seleniumUrl, const std::string sessionId, const std::string target, const int timeout_ms = 2000)
+std::string FindElementByXPath(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const int timeout_ms = 2000)
 {
 	try {
 		const auto result{ WaitForElementVisible(
@@ -167,6 +175,30 @@ std::string FindElementByXPath(const std::string seleniumUrl, const std::string 
 	catch (...) {
 		std::cerr << "Ошибка: " << target << std::endl;
 	}
+
+
+	throw std::runtime_error("Критическая ошибка поиска: " + target);
+}
+
+// ------------------- Check element value -------------------
+void CheckKey(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const Command& cmd) {
+	json resp = GetJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + "/property/value");
+
+	if (!resp.contains("value"))
+	{
+		std::cerr << "Значение поля: " << cmd.target << " получить не удалось!" << std::endl;
+		return;
+	}
+
+	std::string actual = resp["value"].get<std::string>();
+
+	if (actual == cmd.value)
+	{
+		std::cout << "Поле " << cmd.target << " имеет ожидаемое значение: " << cmd.value << std::endl;
+	}
+	else {
+		std::cerr << "Проверка не прошла: у элемента " << cmd.target << " ожидалось: " << cmd.value << " - текущие: " << actual << std::endl;
+	}
 }
 
 void ClickElement(const std::string seleniumUrl, const std::string sessionId, const std::string target)
@@ -180,8 +212,22 @@ void SendKeys(const std::string seleniumUrl, const std::string sessionId, const 
 		{ {"text", text} });
 }
 
+int GetTimeout(const Command& cmd)
+{
+	auto timeout{ 10000 };
+	try {
+		if (!cmd.value.empty())
+			timeout = std::stoi(cmd.value);
+
+	}
+	catch (...) {
+		std::cerr << "Некорректное значение таймаута: " << cmd.value << std::endl;
+	}
+	return timeout;
+}
+
 // ------------------- Main -------------------
-int main() {
+int main(int argc, char* argv[]) {
 	setlocale(LC_ALL, "ru_RU.UTF-8");
 
 	const std::string seleniumUrl = "http://localhost:4444";
@@ -194,27 +240,64 @@ int main() {
 	std::string sessionId = sessionResp["value"]["sessionId"];
 	std::cout << "Session ID: " << sessionId << std::endl;
 
-	auto script = LoadScript("script.txt");
 
-
-	for (const auto& cmd : script) {
-		if (cmd.action == "goto") {
-			Navigate(seleniumUrl, sessionId, cmd.target);
-		}
-		else if (cmd.action == "click") {
+	std::map<std::string, std::function<void(const Command& cmd)>> actions;
+	actions["goto"] = [&](const Command& cmd)
+		{ Navigate(seleniumUrl, sessionId, cmd.target); };
+	actions["click"] = [&](const Command& cmd)
+		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, cmd.target) };
 			ClickElement(seleniumUrl, sessionId, element);
-		}
-		else if (cmd.action == "input") {
+		};
+	actions["input"] = [&](const Command& cmd)
+		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, cmd.target) };
 			SendKeys(seleniumUrl, sessionId, element, cmd.value);
-		}
-		else {
-			std::cerr << "Неизвестная команда: " << cmd.action << std::endl;
-		}
+		};
+	actions["check"] = [&](const Command& cmd)
+		{
+			const auto element{ FindElementByXPath(seleniumUrl, sessionId, cmd.target) };
+			CheckKey(seleniumUrl, sessionId, element, cmd);
+		};
+	actions["wait"] = [&](const Command& cmd)
+		{
+			const auto timeout{ GetTimeout(cmd) };
+			WaitForPageLoad(seleniumUrl, sessionId, timeout);
+			std::cout << "Ожидание загрузки страницы завершено (таймаут " << timeout << " мс)." << std::endl;
+		};
+
+	if (argc < 2) {
+		std::cerr << "Внимание: не указан путь к файлу со сценарием." << std::endl;
+		std::cerr << "Пример: ./app script.txt" << std::endl;
+		std::cerr << "Будет использовать стандартный сценарий!" << std::endl;
 	}
 
-	std::cout << "Сценарий завершён." << std::endl;
+	const auto firstScript{ 1 };
+	const auto lastScript{ argc < 2 ? 2 : argc };
+
+	for (const auto& i : std::views::iota(firstScript, lastScript))
+	{
+		const auto scriptPath = argc < 2 ? "script.txt" : argv[i];
+		const auto script = LoadScript(scriptPath);
+
+
+		for (const auto& cmd : script)
+		{
+			if (actions.find(cmd.action) != actions.end())
+			{
+				actions[cmd.action](cmd);
+			}
+			else
+			{
+				std::cerr << "Неизвестная команда: " << cmd.action << std::endl;
+			}
+		}
+		std::cout << "Сценарий " << scriptPath << " завершён." << std::endl;
+	}
+
+	std::cout << "\n\n\t!!!!!!!!!Автотесты завершены!!!!!!!!!!!!" << std::endl;
+
 }
+
 
 

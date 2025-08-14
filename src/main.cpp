@@ -15,6 +15,8 @@
 #include <ranges>
 #include <print>
 
+#include "screenshot.h"
+
 using json = nlohmann::json;
 
 // ------------------- Callback libcurl -------------------
@@ -311,10 +313,14 @@ int main(int argc, char* argv[]) {
 				catch (const std::exception& e)
 				{
 					std::cerr << "Ошибка: " << e.what() << '\n';
+					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+					CaptureFullScreenAndSave(L"D:\\Repos\\tmp2\\AT\\build\\bin\\Debug\\");
+					return 1;
 				}
 			}
 			else
 			{
+
 				std::cerr << "Неизвестная команда: " << cmd.action << std::endl;
 			}
 		}

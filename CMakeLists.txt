@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 4.0)
 project(AT VERSION 1.0.0)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -15,8 +15,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 set (SOURCES src/main.cpp
+	src/screenshot.cpp
 	)
 set (HEADER 
+	src/screenshot.h
 )
 
 source_group("Source files/Source" FILES ${SOURCES}) 
@@ -27,6 +29,7 @@ add_executable(${PROJECT_NAME} ${SOURCES} )
 find_package(jsoncpp REQUIRED)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json)
+find_package(stb)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE jsoncpp_lib CURL::libcurl nlohmann_json::nlohmann_json) 
+target_link_libraries(${PROJECT_NAME} PRIVATE jsoncpp_lib CURL::libcurl nlohmann_json::nlohmann_json stb::stb) 
 

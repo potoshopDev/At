@@ -16,6 +16,7 @@
 
 #include "screenshot.h"
 #include "Logger.h"
+#include "GetDate.h"
 
 using json = nlohmann::json;
 
@@ -337,22 +338,26 @@ int main(int argc, char* argv[]) {
 			const auto msg{ std::format("Ожидание завершено (таймаут {}мс", timeout) };
 			Logger::Log(Logger::Level::Info, msg);
 		};
-	actions["save"] = [&](const Command& cmd)
-		{
-			std::string text{ cmd.value };
-			std::string key{ cmd.target };
+	auto SaveKey = [&](const std::string& value, const std::string& target)
+	{
+			std::string text{ value };
+			std::string key{ target };
 
 			if (!CheckKey(key))
 			{
-				const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
+				const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(target)) };
 				text = GetElementText(seleniumUrl, sessionId, element);
-				key = cmd.value;
+				key = value;
 			}
 
 			storage[key] = text;
 
 			const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
 			Logger::Log(Logger::Level::Info, msg);
+	};
+	actions["save"] = [&](const Command& cmd)
+		{
+			SaveKey(cmd.value, cmd.target);
 		};
 	actions["#"] = [&](const Command& cmd)
 		{
@@ -360,6 +365,26 @@ int main(int argc, char* argv[]) {
 	actions["print"] = [&](const Command& cmd)
 		{
 			Logger::Log(Logger::Level::Info, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+		};
+	actions["printw"] = [&](const Command& cmd)
+		{
+			Logger::Log(Logger::Level::Warn, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+		};
+	actions["printe"] = [&](const Command& cmd)
+		{
+			Logger::Log(Logger::Level::Error, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+		};
+	actions["getd"] = [&](const Command& cmd)
+		{
+			const auto dateAdjustment{cmd.value.empty() ? 0 : GetTimeout(cmd)};
+			const auto rdate{ Date::getDMY(dateAdjustment) };
+			SaveKey(rdate, cmd.target);
+		};
+	actions["geth"] = [&](const Command& cmd)
+		{
+			const auto dateAdjustment{cmd.value.empty() ? 0 : GetTimeout(cmd)};
+			const auto rdate{ Date::getHM(dateAdjustment) };
+			SaveKey(rdate, cmd.target);
 		};
 
 	if (argc < 2) {

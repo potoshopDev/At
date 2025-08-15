@@ -17,10 +17,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 set (SOURCES src/main.cpp
 	src/screenshot.cpp
 	src/Logger.cpp
+	src/GetDate.cpp
 	)
 set (HEADER 
 	src/screenshot.h
 	src/Logger.h
+	src/GetDate.h
 )
 
 source_group("Source files/Source" FILES ${SOURCES}) 

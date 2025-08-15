@@ -1,5 +1,4 @@
 #include <iostream>
-#include <string>
 #include <thread>
 #include <chrono>
 #include <curl/curl.h>
@@ -16,6 +15,7 @@
 #include <print>
 
 #include "screenshot.h"
+#include "Logger.h"
 
 using json = nlohmann::json;
 
@@ -81,9 +81,11 @@ void WaitForPageLoad(const std::string& baseUrl, const std::string& sessionId, i
 			json resp = PostJson(baseUrl + "/session/" + sessionId + "/execute/sync",
 				{ {"script", "return document.readyState;"},
 				 {"args", json::array()} });
+
 			if (resp.contains("value") && resp["value"].get<std::string>() == "complete") {
 				return;
 			}
+			else Logger::Log(Logger::Level::Info, "Ожидаю загрузку страницы.");
 		}
 		catch (...) {}
 		std::this_thread::sleep_for(std::chrono::milliseconds(step));
@@ -107,6 +109,8 @@ bool IsElementVisible(const std::string& baseUrl, const std::string& sessionId, 
 std::string WaitForElementVisible(const std::string& baseUrl, const std::string& sessionId, const std::string& xpath, int timeout_ms = 10000) {
 	int elapsed = 0;
 	const int step = 200;
+
+	Logger::Log(Logger::Level::Info, "Поиск элемента: " + xpath);
 
 	while (elapsed < timeout_ms) {
 		try {
@@ -147,6 +151,8 @@ std::vector<Command> LoadScript(const std::string& filename) {
 
 void Navigate(const std::string& seleniumUrl, const std::string& sessionId, const std::string& targetUrl, const int timeout_ms = 10000)
 {
+	Logger::Log(Logger::Level::Info, "Перехожу по URL " + targetUrl);
+
 	PostJson(seleniumUrl + "/session/" + sessionId + "/url",
 		{ {"url", targetUrl} });
 
@@ -156,6 +162,8 @@ void Navigate(const std::string& seleniumUrl, const std::string& sessionId, cons
 std::string FindElementByXPath(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const int timeout_ms = 2000)
 {
 	try {
+		Logger::Log(Logger::Level::Info, "Ищу элемент на странице: " + target);
+
 		const auto result{ WaitForElementVisible(
 			seleniumUrl, sessionId,
 			target,
@@ -167,12 +175,13 @@ std::string FindElementByXPath(const std::string& seleniumUrl, const std::string
 	}
 
 	catch (const std::exception& e) {
+		Logger::Log(Logger::Level::Error, "Не найден: " + target);
 		std::cerr << "Ошибка: " << e.what() << std::endl;
 	}
 	catch (...) {
+		Logger::Log(Logger::Level::Error, "Не найден: " + target);
 		std::cerr << "Ошибка: " << target << std::endl;
 	}
-
 
 	throw std::runtime_error("Критическая ошибка поиска: " + target);
 }
@@ -190,6 +199,8 @@ std::string LoadKey(const std::string& key)
 	if (key.rfind("@@", 0) == 0) {
 		auto it = storage.find(key);
 		if (it != storage.end()) return it->second;
+
+		Logger::Log(Logger::Level::Error, "Не найден ключ: " + key);
 		throw std::runtime_error("Ключ " + key + " не найден в storage");
 	}
 	return key;
@@ -202,20 +213,22 @@ void CheckKey(const std::string& seleniumUrl, const std::string& sessionId, cons
 
 	if (actual == current)
 	{
-		std::cout << "Поле " << cmd.target << " имеет ожидаемое значение: " << current << std::endl;
+		Logger::Log(Logger::Level::Info, "Поде " + cmd.target + "имеет ожидаемое значение: " + current);
 	}
 	else {
-		std::cerr << "Проверка не прошла: у элемента " << cmd.target << " ожидалось: " << current << " - текущие: " << actual << std::endl;
+		Logger::Log(Logger::Level::Warn, "Проверка не прошла: у элемента " + cmd.target + "ожидалось: " + current + " -  текущие: " + actual);
 	}
 }
 
 void ClickElement(const std::string seleniumUrl, const std::string sessionId, const std::string target)
 {
+	Logger::Log(Logger::Level::Info, "Кликаю на " + target);
 	PostJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + "/click", json::object());
 }
 
 void SendKeys(const std::string seleniumUrl, const std::string sessionId, const std::string target, const std::string text)
 {
+	Logger::Log(Logger::Level::Info, "Пишу в поле: " + target + " значение: " + text);
 	PostJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + "/value",
 		{ {"text", text} });
 }
@@ -240,6 +253,8 @@ int GetTimeout(const Command& cmd)
 int main(int argc, char* argv[]) {
 	setlocale(LC_ALL, "ru_RU.UTF-8");
 
+	Logger::Init();
+
 	const std::string seleniumUrl = "http://localhost:4444";
 
 	// 1. Создаём сессию Chrome
@@ -248,7 +263,9 @@ int main(int argc, char* argv[]) {
 	};
 	json sessionResp = PostJson(seleniumUrl + "/session", caps);
 	std::string sessionId = sessionResp["value"]["sessionId"];
-	std::cout << "Session ID: " << sessionId << std::endl;
+
+	Logger::Log(Logger::Level::Info, "Запускаю selenium");
+	Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
 
 	std::map<std::string, std::function<void(const Command& cmd)>> actions;
 	actions["goto"] = [&](const Command& cmd)
@@ -272,26 +289,31 @@ int main(int argc, char* argv[]) {
 		{
 			const auto timeout{ GetTimeout(cmd) };
 			WaitForPageLoad(seleniumUrl, sessionId, timeout);
-			std::cout << "Ожидание загрузки страницы завершено (таймаут " << timeout << " мс)." << std::endl;
+
+			const auto msg{ std::format("Ожидание загрузки страницы завершено (таймаут {}мс", timeout) };
+			Logger::Log(Logger::Level::Info, msg);
 		};
 	actions["wait"] = [&](const Command& cmd)
 		{
 			const auto timeout{ GetTimeout(cmd) };
 			std::this_thread::sleep_for(std::chrono::milliseconds(timeout));
-			std::cout << "Ожидание завершено (таймаут " << timeout << " мс)." << std::endl;
+
+			const auto msg{ std::format("Ожидание завершено (таймаут {}мс", timeout) };
+			Logger::Log(Logger::Level::Info, msg);
 		};
 	actions["save"] = [&](const Command& cmd)
 		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
 			const auto text = GetElementText(seleniumUrl, sessionId, element);
 			storage[cmd.value] = text;
-			std::cout << "Сохранено значение: " << cmd.value << " = " << storage.at(cmd.value) << std::endl;
+
+			const auto msg{ std::format("Сохранено значение: {} = {}", cmd.value, storage.at(cmd.value)) };
+			Logger::Log(Logger::Level::Info, msg);
 		};
 
 	if (argc < 2) {
-		std::cerr << "Внимание: не указан путь к файлу со сценарием." << std::endl;
-		std::cerr << "Пример: ./app script.txt" << std::endl;
-		std::cerr << "Будет использовать стандартный сценарий!" << std::endl;
+		const auto msg{ std::format("Внимание: не указан путь к файлу со сценарием.\nПример: ./app script.txt\nБудет использовать стандартный сценарий!") };
+		Logger::Log(Logger::Level::Info, msg);
 	}
 
 	const auto firstScript{ 1 };
@@ -312,21 +334,27 @@ int main(int argc, char* argv[]) {
 				}
 				catch (const std::exception& e)
 				{
-					std::cerr << "Ошибка: " << e.what() << '\n';
+					const auto msg{ std::string(e.what()) };
+					Logger::Log(Logger::Level::Error, msg);
+
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-					CaptureFullScreenAndSave(L"D:\\Repos\\tmp2\\AT\\build\\bin\\Debug\\");
+
+					Logger::Log(Logger::Level::Warn, "Делаю скриншот главного окна");
+					CaptureFullScreenAndSave(L"D:\\Repos\\tmp2\\AT\\build\\bin\\Debug\\log\\screenshots");
+					Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
+					Logger::Log(Logger::Level::Info, "------------------------------------------------");
 					return 1;
 				}
 			}
 			else
 			{
-
-				std::cerr << "Неизвестная команда: " << cmd.action << std::endl;
+				Logger::Log(Logger::Level::Error, "Неизвестная команда: " + cmd.action);
 			}
 		}
-		std::cout << "Сценарий " << scriptPath << " завершён." << std::endl;
+		Logger::Log(Logger::Level::Info, "Сценарий завершен: " + std::string(scriptPath));
 
 	}
 
-	std::cout << "\n\n\t!!!!!!!!!Автотесты завершены!!!!!!!!!!!!" << std::endl;
+	Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
+	Logger::Log(Logger::Level::Info, "\n\n\t!!!!!!!!!Автотесты завершены!!!!!!!!!!!!");
 }

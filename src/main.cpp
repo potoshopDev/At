@@ -354,6 +354,13 @@ int main(int argc, char* argv[]) {
 			const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
 			Logger::Log(Logger::Level::Info, msg);
 		};
+	actions["#"] = [&](const Command& cmd)
+		{
+		};
+	actions["print"] = [&](const Command& cmd)
+		{
+			Logger::Log(Logger::Level::Info, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+		};
 
 	if (argc < 2) {
 		const auto msg{ std::format("Внимание: не указан путь к файлу со сценарием.\nПример: ./app script.txt\nБудет использовать стандартный сценарий!") };

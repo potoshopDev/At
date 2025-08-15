@@ -191,12 +191,48 @@ std::unordered_map<std::string, std::string> storage;
 
 std::string GetElementText(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target)
 {
-	json resp = GetJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + "/property/value");
-	return resp.contains("value") ? resp["value"].get<std::string>() : "";
+	//json resp = GetJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + "/property/value");
+	//return resp.contains("value") ? resp["value"].get<std::string>() : "";
+
+	auto tryGet = [&](const std::string& endpoint, const std::string& label) -> std::string {
+		try {
+			json resp = GetJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + endpoint);
+			if (resp.contains("value") && !resp["value"].is_null()) {
+				auto txt = resp["value"].get<std::string>();
+				if (!txt.empty()) {
+					Logger::Log(Logger::Level::Info, "Удалось найти текст: " + label + " : " + txt);
+					return txt;
+				}
+			}
+		}
+		catch (const std::exception& e) {
+			const std::string msg(e.what());
+			Logger::Log(Logger::Level::Warn, "Не удалось найти текст: " + label + " : " + msg);
+		}
+		return "";
+		};
+
+	// Сначала пробуем value (для input/textarea)
+	auto text = tryGet("/property/value", "value");
+	if (!text.empty())
+		return text;
+
+	// Потом пробуем inner text (для div/a/span/etc.)
+	text = tryGet("/text", "text");
+	if (!text.empty())
+		return text;
+
+	throw std::runtime_error("Не удалось найти и сохранить текст из: " + target);
+
+	return "";
+}
+bool CheckKey(const std::string& key)
+{
+	return key.rfind("@@", 0) == 0;
 }
 std::string LoadKey(const std::string& key)
 {
-	if (key.rfind("@@", 0) == 0) {
+	if (CheckKey(key)) {
 		auto it = storage.find(key);
 		if (it != storage.end()) return it->second;
 
@@ -269,7 +305,7 @@ int main(int argc, char* argv[]) {
 
 	std::map<std::string, std::function<void(const Command& cmd)>> actions;
 	actions["goto"] = [&](const Command& cmd)
-		{ Navigate(seleniumUrl, sessionId, cmd.target); };
+		{ Navigate(seleniumUrl, sessionId, LoadKey(cmd.target)); };
 	actions["click"] = [&](const Command& cmd)
 		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, cmd.target) };
@@ -303,11 +339,19 @@ int main(int argc, char* argv[]) {
 		};
 	actions["save"] = [&](const Command& cmd)
 		{
-			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
-			const auto text = GetElementText(seleniumUrl, sessionId, element);
-			storage[cmd.value] = text;
+			std::string text{ cmd.value };
+			std::string key{ cmd.target };
 
-			const auto msg{ std::format("Сохранено значение: {} = {}", cmd.value, storage.at(cmd.value)) };
+			if (!CheckKey(key))
+			{
+				const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
+				text = GetElementText(seleniumUrl, sessionId, element);
+				key = cmd.value;
+			}
+
+			storage[key] = text;
+
+			const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
 			Logger::Log(Logger::Level::Info, msg);
 		};
 

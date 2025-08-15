@@ -8,6 +8,7 @@
 #include <chrono>
 #include <format>
 #include <iostream>
+#include <filesystem>
 
 
 void CaptureFullScreenAndSave(const std::wstring& folder)
@@ -49,6 +50,9 @@ void CaptureFullScreenAndSave(const std::wstring& folder)
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     std::tm local_tm;
     localtime_s(&local_tm, &t);
+
+	namespace fs = std::filesystem;
+	fs::create_directories(folder);
 
     std::wstring filename = std::format(L"{}\\screenshot_{:02d}-{:02d}-{:04d}_{:02d}-{:02d}-{:02d}.png",
         folder,

@@ -19,12 +19,16 @@ set (SOURCES src/main.cpp
 	src/Logger.cpp
 	src/GetDate.cpp
 	src/winsystem.cpp
+	src/scanelements.cpp
+	src/json.cpp
 	)
 set (HEADER 
 	src/screenshot.h
 	src/Logger.h
 	src/GetDate.h
 	src/winsystem.h
+	src/scanelements.h
+	src/json.h
 )
 
 source_group("Source files/Source" FILES ${SOURCES}) 

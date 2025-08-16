@@ -17,6 +17,8 @@
 #include "screenshot.h"
 #include "Logger.h"
 #include "GetDate.h"
+#include "winsystem.h"
+
 
 using json = nlohmann::json;
 
@@ -137,7 +139,11 @@ struct Command {
 
 std::vector<Command> LoadScript(const std::string& filename) {
 	std::vector<Command> commands;
-	std::ifstream file(filename);
+
+	namespace fs = std::filesystem;
+	const auto fullPathToFile{ win::getFullPath(filename) };
+
+	std::ifstream file(fullPathToFile);
 	std::string line;
 	while (std::getline(file, line)) {
 		std::istringstream ss(line);
@@ -339,7 +345,7 @@ int main(int argc, char* argv[]) {
 			Logger::Log(Logger::Level::Info, msg);
 		};
 	auto SaveKey = [&](const std::string& value, const std::string& target)
-	{
+		{
 			std::string text{ value };
 			std::string key{ target };
 
@@ -354,7 +360,7 @@ int main(int argc, char* argv[]) {
 
 			const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
 			Logger::Log(Logger::Level::Info, msg);
-	};
+		};
 	actions["save"] = [&](const Command& cmd)
 		{
 			SaveKey(cmd.value, cmd.target);
@@ -376,13 +382,13 @@ int main(int argc, char* argv[]) {
 		};
 	actions["getd"] = [&](const Command& cmd)
 		{
-			const auto dateAdjustment{cmd.value.empty() ? 0 : GetTimeout(cmd)};
+			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getDMY(dateAdjustment) };
 			SaveKey(rdate, cmd.target);
 		};
 	actions["geth"] = [&](const Command& cmd)
 		{
-			const auto dateAdjustment{cmd.value.empty() ? 0 : GetTimeout(cmd)};
+			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getHM(dateAdjustment) };
 			SaveKey(rdate, cmd.target);
 		};
@@ -397,6 +403,7 @@ int main(int argc, char* argv[]) {
 
 	for (const auto& i : std::views::iota(firstScript, lastScript))
 	{
+
 		const auto scriptPath = argc < 2 ? "script.txt" : argv[i];
 		const auto script = LoadScript(scriptPath);
 
@@ -416,7 +423,7 @@ int main(int argc, char* argv[]) {
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 					Logger::Log(Logger::Level::Warn, "Делаю скриншот главного окна");
-					CaptureFullScreenAndSave(L"D:\\Repos\\tmp2\\AT\\build\\bin\\Debug\\log\\screenshots");
+					CaptureFullScreenAndSave();
 					Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
 					Logger::Log(Logger::Level::Info, "------------------------------------------------");
 					return 1;

@@ -8,6 +8,7 @@
 #include <print>
 #include <mutex>
 
+#include "winsystem.h"
 
 namespace Logger {
 
@@ -20,8 +21,14 @@ namespace Logger {
 
 	void Init() {
 		namespace fs = std::filesystem;
-		fs::create_directories("log");
-		logFile.open("log/log.log", std::ios::app);
+		const auto fullPathToApp{ win::getFullPath("") };
+
+		fs::create_directories(fullPathToApp / "log");
+
+		const auto pathToLog("log/log.log");
+		const auto fullPathToLog{ win::getFullPath(pathToLog) };
+
+		logFile.open(fullPathToLog, std::ios::app);
 
 		if (!logFile.is_open()) {
 			throw std::runtime_error("Не удалось открыть файл лога");

@@ -166,7 +166,7 @@ void Navigate(const std::string& seleniumUrl, const std::string& sessionId, cons
 	WaitForPageLoad(seleniumUrl, sessionId, timeout_ms);
 }
 
-std::string FindElementByXPath(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const int timeout_ms = 2000)
+std::string FindElementByXPath(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const int timeout_ms = 10000)
 {
 	try {
 		Logger::Log(Logger::Level::Info, "Ищу элемент на странице: " + target);
@@ -292,6 +292,69 @@ int GetTimeout(const Command& cmd)
 	return timeout;
 }
 
+void SelectOptionJava(const std::string& seleniumUrl, const std::string& sessionId, const std::string& comboXPath, const std::string& optionValue)
+{
+	const auto comboElement{ FindElementByXPath(seleniumUrl, sessionId, comboXPath) };
+	ClickElement(seleniumUrl, sessionId, comboElement);
+
+	// JS-скрипт для выбора значения в <select>
+	//std::string script =
+	//	"const select = document.evaluate(\"" + comboXPath + "\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
+	//	"if (select) {"
+	//	"  for (let i = 0; i < select.options.length; i++) {"
+	//	"    if (select.options[i].text === '" + optionValue + "') {"
+	//	"      select.selectedIndex = i;"
+	//	"      select.dispatchEvent(new Event('change', { bubbles: true }));"
+	//	"      return true;"
+	//	"    }"
+	//	"  }"
+	//	"}"
+	//	"return false;";
+
+	//json resp = PostJson(seleniumUrl + "/session/" + sessionId + "/execute/sync",
+	//	{ {"script", script}, {"args", json::array()} });
+
+	//if (!resp.contains("value") || !resp["value"].get<bool>())
+	//{
+	//	throw std::runtime_error("Не удалось выбрать значение '" + optionValue + "' в комбо-боксе: " + comboXPath);
+	//}
+
+	Logger::Log(Logger::Level::Info, "Выбран элемент: " + optionValue);
+
+}
+void SelectComboBoxOptionJava(const std::string& seleniumUrl, const std::string& sessionId, const std::string& comboXPath, const std::string& optionValue)
+{
+	Logger::Log(Logger::Level::Info, "Выбираю элемент в комбо-боксе: " + comboXPath + " значение: " + optionValue);
+
+	// Находим сам комбо-бокс
+	const auto comboElement{ FindElementByXPath(seleniumUrl, sessionId, comboXPath) };
+	ClickElement(seleniumUrl, sessionId, comboElement);
+
+	// JS-скрипт для выбора значения в <select>
+	std::string script =
+		"const select = document.evaluate(\"" + comboXPath + "\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
+		"if (select) {"
+		"  for (let i = 0; i < select.options.length; i++) {"
+		"    if (select.options[i].text === '" + optionValue + "') {"
+		"      select.selectedIndex = i;"
+		"      select.dispatchEvent(new Event('change', { bubbles: true }));"
+		"      return true;"
+		"    }"
+		"  }"
+		"}"
+		"return false;";
+
+	json resp = PostJson(seleniumUrl + "/session/" + sessionId + "/execute/sync",
+		{ {"script", script}, {"args", json::array()} });
+
+	if (!resp.contains("value") || !resp["value"].get<bool>())
+	{
+		throw std::runtime_error("Не удалось выбрать значение '" + optionValue + "' в комбо-боксе: " + comboXPath);
+	}
+
+	Logger::Log(Logger::Level::Info, "Выбран элемент: " + optionValue);
+}
+
 // ------------------- Main -------------------
 int main(int argc, char* argv[]) {
 	setlocale(LC_ALL, "ru_RU.UTF-8");
@@ -315,7 +378,7 @@ int main(int argc, char* argv[]) {
 		{ Navigate(seleniumUrl, sessionId, LoadKey(cmd.target)); };
 	actions["click"] = [&](const Command& cmd)
 		{
-			const auto element{ FindElementByXPath(seleniumUrl, sessionId, cmd.target) };
+			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
 			ClickElement(seleniumUrl, sessionId, element);
 		};
 	actions["input"] = [&](const Command& cmd)
@@ -391,6 +454,14 @@ int main(int argc, char* argv[]) {
 			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getHM(dateAdjustment) };
 			SaveKey(rdate, cmd.target);
+		};
+	actions["selectjava"] = [&](const Command& cmd)
+		{
+			SelectComboBoxOptionJava(seleniumUrl, sessionId, cmd.target, LoadKey(cmd.value));
+		};
+	actions["clicktext"] = [&](const Command& cmd)
+		{
+			SelectOptionJava(seleniumUrl, sessionId, cmd.target, LoadKey(cmd.value));
 		};
 
 	if (argc < 2) {

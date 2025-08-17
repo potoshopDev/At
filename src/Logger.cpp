@@ -51,11 +51,13 @@ namespace Logger {
 
 	void Init() {
 		namespace fs = std::filesystem;
-		const auto fullPathToApp{ fs::current_path() };
-		fs::create_directories(fullPathToApp / "log");
 
-		const auto pathToLog("log/log.log");
-		const auto fullPathToLog{ fullPathToApp / pathToLog };
+		const auto fullPathToApp{ win::getFullPath("") };
+		const auto pathToLogFolder{ fullPathToApp / L"log" };
+
+		fs::create_directories(pathToLogFolder);
+
+		const auto fullPathToLog{pathToLogFolder / L"log.log"};
 
 		// Открываем файл в бинарном режиме и записываем BOM для UTF-8
 		logFile.open(fullPathToLog, std::ios::app | std::ios::binary);

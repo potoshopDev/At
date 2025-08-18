@@ -104,11 +104,11 @@ std::vector<Command> LoadScript(const std::string& filename) {
 	return commands;
 }
 
-void Navigate(const std::string& seleniumUrl, const std::string& sessionId, const std::string& targetUrl, const int timeout_ms = 10000)
+void Navigate(const std::string& seleniumUrl, const std::string& sessionId, const std::string& targetUrl, const std::string& path, const int timeout_ms = 10000)
 {
 	Logger::Log(Logger::Level::Info, "Перехожу по URL " + targetUrl);
 
-	PostJson(seleniumUrl + "/session/" + sessionId + "/url",
+	PostJson(seleniumUrl+path + "/session/" + sessionId + "/url",
 		{ {"url", targetUrl} });
 
 	WaitForPageLoad(seleniumUrl, sessionId, timeout_ms);
@@ -304,7 +304,7 @@ int main(int argc, char* argv[]) {
 
 	std::map<std::string, std::function<void(const Command& cmd)>> actions;
 	actions["goto"] = [&](const Command& cmd)
-		{ Navigate(seleniumUrl, sessionId, LoadKey(cmd.target)); };
+		{ Navigate(seleniumUrl, sessionId, LoadKey(cmd.target), LoadKey(cmd.value)); };
 	actions["click"] = [&](const Command& cmd)
 		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
@@ -386,11 +386,11 @@ int main(int argc, char* argv[]) {
 		};
 	actions["selectjava"] = [&](const Command& cmd)
 		{
-			SelectComboBoxOptionJava(seleniumUrl, sessionId, cmd.target, LoadKey(cmd.value));
+			SelectComboBoxOptionJava(seleniumUrl, sessionId, LoadKey(cmd.target), LoadKey(cmd.value));
 		};
 	actions["clicktext"] = [&](const Command& cmd)
 		{
-			SelectOptionJava(seleniumUrl, sessionId, cmd.target, LoadKey(cmd.value));
+			SelectOptionJava(seleniumUrl, sessionId, LoadKey(cmd.target), LoadKey(cmd.value));
 		};
 	actions["scan"] = [&](const Command& cmd)
 		{

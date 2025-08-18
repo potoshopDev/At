@@ -8,4 +8,6 @@ stb/cci.20240531
 CMakeDeps
 CMakeToolchain
 
-
+[options]
+*:shared=False
+libcurl/*:shared=False

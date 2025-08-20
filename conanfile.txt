@@ -1,0 +1,13 @@
+[requires]
+jsoncpp/1.9.6
+libcurl/8.12.1
+nlohmann_json/3.12.0
+stb/cci.20240531
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[options]
+*:shared=False
+libcurl/*:shared=False

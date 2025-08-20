@@ -117,7 +117,6 @@ void Navigate(const std::string& seleniumUrl, const std::string& sessionId, cons
 std::string FindElementByXPath(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const int timeout_ms = 10000)
 {
 	try {
-		Logger::Log(Logger::Level::Info, "Ищу элемент на странице: " + target);
 
 		const auto result{ WaitForElementVisible(
 			seleniumUrl, sessionId,
@@ -307,7 +306,7 @@ void AddToStorage(const std::string& key, const std::string& text, bool isLoggin
 		Logger::Log(Logger::Level::Info, msg);
 	}
 }
-void wait_until_date(const std::string& input) {
+void wait_until_date(const std::string& seleniumUrl, const std::string& sessionId, const std::string& tar, const std::string& input) {
 	// 1. Убираем ведущие пробелы
 	std::string date_str = input;
 	if (!date_str.empty() && date_str.front() == ' ') {
@@ -337,7 +336,15 @@ void wait_until_date(const std::string& input) {
 			std::chrono::duration_cast<std::chrono::seconds>(diff).count()) };
 		Logger::Log(Logger::Level::Info, msg);
 
-		std::this_thread::sleep_for(diff);
+		while (now < target)
+		{
+
+			const auto element{ FindElementByXPath(seleniumUrl, sessionId, tar) };
+			ClickElement(seleniumUrl, sessionId, element);
+			std::this_thread::sleep_for(std::chrono::seconds(10));
+			now = std::chrono::system_clock::now();
+		}
+		//std::this_thread::sleep_for(diff);
 	}
 	else {
 		std::cout << "Указанная дата уже наступила или в прошлом." << std::endl;
@@ -367,7 +374,9 @@ int main(int argc, char* argv[]) {
 		{ Navigate(seleniumUrl, sessionId, LoadKey(cmd.target), LoadKey(cmd.value)); };
 	actions["click"] = [&](const Command& cmd)
 		{
+			Logger::Log(Logger::Level::Info, "Ищу элемент на странице: " + LoadKey(cmd.target));
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
+
 			ClickElement(seleniumUrl, sessionId, element);
 			Logger::Log(Logger::Level::Info, "Кликнул на: " + LoadKey(cmd.target));
 		};
@@ -391,7 +400,7 @@ int main(int argc, char* argv[]) {
 		};
 	actions["waitd"] = [&](const Command& cmd)
 		{
-			wait_until_date(LoadKey(cmd.value));
+			wait_until_date(seleniumUrl, sessionId, LoadKey(cmd.target), LoadKey(cmd.value));
 		};
 	actions["wait"] = [&](const Command& cmd)
 		{

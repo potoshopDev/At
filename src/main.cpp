@@ -307,6 +307,42 @@ void AddToStorage(const std::string& key, const std::string& text, bool isLoggin
 		Logger::Log(Logger::Level::Info, msg);
 	}
 }
+void wait_until_date(const std::string& input) {
+	// 1. Убираем ведущие пробелы
+	std::string date_str = input;
+	if (!date_str.empty() && date_str.front() == ' ') {
+		date_str.erase(date_str.begin());
+	}
+
+	// 2. Парсим дату "dd.MM.yyyy HH:MM"
+	std::tm tm = {};
+	std::istringstream ss(date_str);
+	ss >> std::get_time(&tm, "%d.%m.%Y %H:%M");
+	if (ss.fail())
+		throw std::runtime_error("Ошибка парсинга даты: " + date_str);
+
+	// Переводим в time_point (локальное время)
+	std::time_t tt = std::mktime(&tm);
+	if (tt == -1)
+		throw std::runtime_error("Ошибка преобразования времени");
+
+	std::chrono::system_clock::time_point target = std::chrono::system_clock::from_time_t(tt);
+	auto now = std::chrono::system_clock::now();
+
+	// 3. Если дата в будущем — ждём
+	if (target > now) {
+		auto diff = target - now;
+
+		const auto msg{ std::format("Жду до указанной даты (секунд: {})...",
+			std::chrono::duration_cast<std::chrono::seconds>(diff).count()) };
+		Logger::Log(Logger::Level::Info, msg);
+
+		std::this_thread::sleep_for(diff);
+	}
+	else {
+		std::cout << "Указанная дата уже наступила или в прошлом." << std::endl;
+	}
+}
 
 // ------------------- Main -------------------
 int main(int argc, char* argv[]) {
@@ -352,6 +388,10 @@ int main(int argc, char* argv[]) {
 
 			const auto msg{ std::format("Ожидание загрузки страницы завершено (таймаут {}мс", timeout) };
 			Logger::Log(Logger::Level::Info, msg);
+		};
+	actions["waitd"] = [&](const Command& cmd)
+		{
+			wait_until_date(LoadKey(cmd.value));
 		};
 	actions["wait"] = [&](const Command& cmd)
 		{
@@ -401,7 +441,7 @@ int main(int argc, char* argv[]) {
 	actions["cache"] = [&](const Command& cmd)
 		{
 			const auto isLogging{ false };
-			SaveKey(cmd.value, cmd.target,SaveToStorage, isLogging);
+			SaveKey(cmd.value, cmd.target, SaveToStorage, isLogging);
 		};
 	actions["#"] = [&](const Command& cmd)
 		{
@@ -460,7 +500,7 @@ int main(int argc, char* argv[]) {
 
 		actions["printsn"] = [&](const Command& cmd)
 			{
-				Logger::Log(Logger::Level::Info, std::string(scriptPath)+": "+ LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+				Logger::Log(Logger::Level::Info, std::string(scriptPath) + ": " + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
 			};
 
 		for (const auto& cmd : script)

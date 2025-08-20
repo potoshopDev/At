@@ -108,7 +108,7 @@ void Navigate(const std::string& seleniumUrl, const std::string& sessionId, cons
 {
 	Logger::Log(Logger::Level::Info, "Перехожу по URL " + targetUrl);
 
-	PostJson(seleniumUrl+path + "/session/" + sessionId + "/url",
+	PostJson(seleniumUrl + path + "/session/" + sessionId + "/url",
 		{ {"url", targetUrl} });
 
 	WaitForPageLoad(seleniumUrl, sessionId, timeout_ms);
@@ -181,16 +181,20 @@ std::string GetElementText(const std::string& seleniumUrl, const std::string& se
 
 	return "";
 }
+bool CheckXPath(const std::string& key)
+{
+	return key.starts_with("//");
+}
 bool CheckKey(const std::string& key)
 {
-	return key.rfind("@@", 0) == 0;
+	return key.starts_with("@@");
 }
 std::string LoadKey(const std::string& key)
 {
 	if (CheckKey(key)) {
 		auto it = storage.find(key);
 		if (it != storage.end()) {
-			Logger::Log(Logger::Level::Info, "Раскрыл псевдоним: '" + key + "' на '" + it->second+"'");
+			Logger::Log(Logger::Level::Info, "Раскрыл псевдоним: '" + key + "' на '" + it->second + "'");
 			return it->second;
 		}
 
@@ -336,26 +340,51 @@ int main(int argc, char* argv[]) {
 			const auto msg{ std::format("Ожидание завершено (таймаут {}мс", timeout) };
 			Logger::Log(Logger::Level::Info, msg);
 		};
-	auto SaveKey = [&](const std::string& value, const std::string& target)
+	auto SaveKey = [&](const std::string& value, const std::string& target, bool isLogging = true)
 		{
 			std::string text{ value };
 			std::string key{ target };
 
-			if (!CheckKey(key))
+			auto getTextToKey = [&]()
+				{
+					const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(key)) };
+					text = GetElementText(seleniumUrl, sessionId, element);
+				};
+
+			if (CheckKey(text))
 			{
-				const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(target)) };
-				text = GetElementText(seleniumUrl, sessionId, element);
+				std::swap(key, text);
+				if (CheckXPath(LoadKey(key))) 
+					getTextToKey();
+				else
+					text = storage.at(key);
+
+				key = target;
+			}
+			else if (!CheckKey(key))
+			{
+				getTextToKey();
 				key = value;
 			}
 
+
+
 			storage[key] = text;
 
-			const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
-			Logger::Log(Logger::Level::Info, msg);
+			if (isLogging)
+			{
+				const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
+				Logger::Log(Logger::Level::Info, msg);
+			}
 		};
 	actions["save"] = [&](const Command& cmd)
 		{
 			SaveKey(cmd.value, cmd.target);
+		};
+	actions["cache"] = [&](const Command& cmd)
+		{
+			const auto isLogging{ false };
+			SaveKey(cmd.value, cmd.target, isLogging);
 		};
 	actions["#"] = [&](const Command& cmd)
 		{

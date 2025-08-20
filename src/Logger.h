@@ -12,6 +12,7 @@ namespace Logger {
 	
 
 	void Init();
+	void SetLogger(bool value);
     void Log(Level lvl, const std::string& message);
 }
 

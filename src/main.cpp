@@ -336,6 +336,8 @@ void wait_until_date(const std::string& seleniumUrl, const std::string& sessionI
 			std::chrono::duration_cast<std::chrono::seconds>(diff).count()) };
 		Logger::Log(Logger::Level::Info, msg);
 
+		Logger::SetLogger(false);
+
 		while (now < target)
 		{
 
@@ -344,10 +346,10 @@ void wait_until_date(const std::string& seleniumUrl, const std::string& sessionI
 			std::this_thread::sleep_for(std::chrono::seconds(10));
 			now = std::chrono::system_clock::now();
 		}
-		//std::this_thread::sleep_for(diff);
+		Logger::SetLogger(true);
 	}
 	else {
-		std::cout << "Указанная дата уже наступила или в прошлом." << std::endl;
+		Logger::Log(Logger::Level::Warn, "Указанная дата уже наступила или в прошлом.");
 	}
 }
 

@@ -21,6 +21,7 @@
 namespace Logger {
 	inline std::ofstream logFile;
 	inline std::mutex logMutex;
+	inline bool isLoggerOn{ true };
 
 
 	std::string CurrentTimestamp() {
@@ -75,7 +76,14 @@ namespace Logger {
 		SetConsoleOutputCP(CP_UTF8);
 	}
 
+	void SetLogger(bool value)
+	{
+		isLoggerOn = value;
+	}
+
 	void Log(Level lvl, const std::string& message) {
+		if (!isLoggerOn) return;
+
 		std::lock_guard guard(logMutex);
 		auto ts = CurrentTimestamp();
 		auto lvlStr = LevelToString(lvl);

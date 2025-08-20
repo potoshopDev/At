@@ -211,7 +211,7 @@ void CheckKey(const std::string& seleniumUrl, const std::string& sessionId, cons
 
 	if (actual == current)
 	{
-		Logger::Log(Logger::Level::Info, "Поде " + cmd.target + "имеет ожидаемое значение: " + current);
+		Logger::Log(Logger::Level::Info, "Поле: " + cmd.target + " имеет ожидаемое значение: " + current);
 	}
 	else {
 		Logger::Log(Logger::Level::Warn, "Проверка не прошла: у элемента " + cmd.target + "ожидалось: " + current + " -  текущие: " + actual);

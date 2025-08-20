@@ -287,6 +287,27 @@ void SelectComboBoxOptionJava(const std::string& seleniumUrl, const std::string&
 	Logger::Log(Logger::Level::Info, "Выбран элемент: " + optionValue);
 }
 
+void SaveToStorage(const std::string& key, const std::string& text, bool isLogging)
+{
+	storage[key] = text;
+
+	if (isLogging)
+	{
+		const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
+		Logger::Log(Logger::Level::Info, msg);
+	}
+}
+void AddToStorage(const std::string& key, const std::string& text, bool isLogging)
+{
+	storage[key] += text;
+
+	if (isLogging)
+	{
+		const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
+		Logger::Log(Logger::Level::Info, msg);
+	}
+}
+
 // ------------------- Main -------------------
 int main(int argc, char* argv[]) {
 	Logger::Init();
@@ -340,7 +361,7 @@ int main(int argc, char* argv[]) {
 			const auto msg{ std::format("Ожидание завершено (таймаут {}мс", timeout) };
 			Logger::Log(Logger::Level::Info, msg);
 		};
-	auto SaveKey = [&](const std::string& value, const std::string& target, bool isLogging = true)
+	auto SaveKey = [&](const std::string& value, const std::string& target, std::function<void(const std::string&, const std::string&, bool)> saveFnc, bool isLogging = true)
 		{
 			std::string text{ value };
 			std::string key{ target };
@@ -354,7 +375,7 @@ int main(int argc, char* argv[]) {
 			if (CheckKey(text))
 			{
 				std::swap(key, text);
-				if (CheckXPath(LoadKey(key))) 
+				if (CheckXPath(LoadKey(key)))
 					getTextToKey();
 				else
 					text = storage.at(key);
@@ -367,24 +388,20 @@ int main(int argc, char* argv[]) {
 				key = value;
 			}
 
-
-
-			storage[key] = text;
-
-			if (isLogging)
-			{
-				const auto msg{ std::format("Сохранено значение: {} = {}", key, storage.at(key)) };
-				Logger::Log(Logger::Level::Info, msg);
-			}
+			saveFnc(key, text, isLogging);
 		};
 	actions["save"] = [&](const Command& cmd)
 		{
-			SaveKey(cmd.value, cmd.target);
+			SaveKey(cmd.value, cmd.target, SaveToStorage);
+		};
+	actions["add"] = [&](const Command& cmd)
+		{
+			SaveKey(cmd.value, cmd.target, AddToStorage);
 		};
 	actions["cache"] = [&](const Command& cmd)
 		{
 			const auto isLogging{ false };
-			SaveKey(cmd.value, cmd.target, isLogging);
+			SaveKey(cmd.value, cmd.target,SaveToStorage, isLogging);
 		};
 	actions["#"] = [&](const Command& cmd)
 		{
@@ -405,13 +422,13 @@ int main(int argc, char* argv[]) {
 		{
 			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getDMY(dateAdjustment) };
-			SaveKey(rdate, cmd.target);
+			SaveKey(rdate, cmd.target, SaveToStorage);
 		};
 	actions["geth"] = [&](const Command& cmd)
 		{
 			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getHM(dateAdjustment) };
-			SaveKey(rdate, cmd.target);
+			SaveKey(rdate, cmd.target, SaveToStorage);
 		};
 	actions["selectjava"] = [&](const Command& cmd)
 		{
@@ -440,6 +457,11 @@ int main(int argc, char* argv[]) {
 
 		const auto scriptPath = argc < 2 ? "script.txt" : argv[i];
 		const auto script = LoadScript(scriptPath);
+
+		actions["printsn"] = [&](const Command& cmd)
+			{
+				Logger::Log(Logger::Level::Info, std::string(scriptPath)+": "+ LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+			};
 
 		for (const auto& cmd : script)
 		{
@@ -475,3 +497,4 @@ int main(int argc, char* argv[]) {
 	Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
 	Logger::Log(Logger::Level::Info, "\n\n\t!!!!!!!!!Автотесты завершены!!!!!!!!!!!!");
 }
+

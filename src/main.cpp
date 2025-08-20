@@ -220,7 +220,6 @@ void CheckKey(const std::string& seleniumUrl, const std::string& sessionId, cons
 
 void ClickElement(const std::string seleniumUrl, const std::string sessionId, const std::string target)
 {
-	Logger::Log(Logger::Level::Info, "Кликаю на " + target);
 	PostJson(seleniumUrl + "/session/" + sessionId + "/element/" + target + "/click", json::object());
 }
 
@@ -313,6 +312,7 @@ int main(int argc, char* argv[]) {
 		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
 			ClickElement(seleniumUrl, sessionId, element);
+			Logger::Log(Logger::Level::Info, "Кликнул на: " + LoadKey(cmd.target));
 		};
 	actions["input"] = [&](const Command& cmd)
 		{

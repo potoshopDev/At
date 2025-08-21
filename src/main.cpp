@@ -540,6 +540,8 @@ int main(int argc, char* argv[]) {
 
 	const auto firstScript{ 1 };
 	const auto lastScript{ argc < 2 ? 2 : argc };
+	const auto sTestName{ "@@Имя теста" };
+	storage[sTestName] = "NONE";
 
 	for (const auto& i : std::views::iota(firstScript, lastScript))
 	{
@@ -549,7 +551,8 @@ int main(int argc, char* argv[]) {
 
 		actions["printsn"] = [&](const Command& cmd)
 			{
-				Logger::Log(Logger::Level::Info, std::string(scriptPath) + ": " + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+				const auto testName{storage.at(sTestName)};
+				Logger::Log(Logger::Level::Info, std::string(scriptPath) + ": "+testName + "|>>>" + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
 			};
 
 		for (const auto& cmd : script)

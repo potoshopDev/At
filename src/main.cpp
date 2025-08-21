@@ -13,6 +13,10 @@
 #include <ranges>
 #include <print>
 
+#include <string_view>
+#include <algorithm>
+#include <cctype>
+
 #include "screenshot.h"
 #include "Logger.h"
 #include "GetDate.h"
@@ -104,6 +108,41 @@ std::vector<Command> LoadScript(const std::string& filename) {
 	return commands;
 }
 
+std::string CleanText(std::string s) {
+	// Заменяем HTML-последовательность &nbsp; на обычный пробел
+	constexpr std::string_view nbsp = "&nbsp;";
+	for (std::size_t pos{};
+		(pos = s.find(nbsp, pos)) != std::string::npos;) {
+		s.replace(pos, nbsp.size(), " ");
+		pos += 1;
+	}
+
+
+	// Заменяем юникодный неразрывный пробел (U+00A0, 0xC2 0xA0 в UTF-8) на обычный пробел
+	for (std::size_t pos{};
+		(pos = s.find("\xC2\xA0", pos)) != std::string::npos;) {
+		s.replace(pos, 2, " ");
+		pos += 1;
+	}
+
+
+	// Убираем лидирующие и хвостовые пробелы/непечатаемые символы
+	auto is_not_space = [](unsigned char c) {
+		return !std::isspace(c);
+		};
+
+
+	auto first = std::ranges::find_if(s, is_not_space);
+	auto last = std::ranges::find_if(s | std::views::reverse, is_not_space).base();
+
+
+	if (first >= last) {
+		return {}; // строка вся пустая/мусор
+	}
+
+
+	return std::string(first, last);
+}
 void Navigate(const std::string& seleniumUrl, const std::string& sessionId, const std::string& targetUrl, const std::string& path, const int timeout_ms = 10000)
 {
 	Logger::Log(Logger::Level::Info, "Перехожу по URL " + targetUrl);
@@ -205,16 +244,15 @@ std::string LoadKey(const std::string& key)
 // ------------------- Check element value -------------------
 void CheckKey(const std::string& seleniumUrl, const std::string& sessionId, const std::string& target, const Command& cmd) {
 
-	const auto actual{ GetElementText(seleniumUrl, sessionId, target) };
+	const auto text{ GetElementText(seleniumUrl, sessionId, target) };
+	const auto actual{ CleanText(text) };
 	const auto current{ LoadKey(cmd.value) };
 
 	if (actual == current)
-	{
 		Logger::Log(Logger::Level::Info, "Поле: " + cmd.target + " имеет ожидаемое значение: " + current);
-	}
-	else {
-		Logger::Log(Logger::Level::Warn, "Проверка не прошла: у элемента " + cmd.target + "ожидалось: " + current + " -  текущие: " + actual);
-	}
+	else
+		throw std::runtime_error("Проверка не прошла: у элемента " + cmd.target + " ожидалось:" + current + " - текущие:" + actual);
+
 }
 
 void ClickElement(const std::string seleniumUrl, const std::string sessionId, const std::string target)
@@ -235,12 +273,12 @@ int GetTimeout(const Command& cmd)
 {
 	auto timeout{ 10000 };
 	try {
-		if (!cmd.value.empty())
-			timeout = std::stoi(cmd.value);
-
+		const auto value{ LoadKey(cmd.value) };
+		if (!value.empty())
+			timeout = std::stoi(value);
 	}
 	catch (...) {
-		std::cerr << "Некорректное значение таймаута: " << cmd.value << std::endl;
+		throw std::runtime_error("Некорректное значение таймаута: " + cmd.value);
 	}
 	return timeout;
 }

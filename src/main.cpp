@@ -390,7 +390,25 @@ void wait_until_date(const std::string& seleniumUrl, const std::string& sessionI
 		Logger::Log(Logger::Level::Warn, "Указанная дата уже наступила или в прошлом.");
 	}
 }
+void ClearElement(const std::string& baseUrl, const std::string& sessionId, const std::string& xpath) {
+	Logger::Log(Logger::Level::Info, "Очищаю поле: " + xpath);
 
+
+	// Сначала ждём появления элемента
+	const auto element{ WaitForElementVisible(baseUrl, sessionId, xpath) };
+
+
+	// Отправляем команду clear
+	const json resp = PostJson(baseUrl + "/session/" + sessionId + "/element/" + element + "/clear", json::object());
+
+
+	if (resp.contains("value") && resp["value"].is_null()) {
+		Logger::Log(Logger::Level::Info, "Поле успешно очищено: " + xpath);
+	}
+	else {
+		Logger::Log(Logger::Level::Error, "Ответ при очистке поля пустой: " + xpath);
+	}
+}
 // ------------------- Main -------------------
 int main(int argc, char* argv[]) {
 	Logger::Init();
@@ -429,6 +447,9 @@ int main(int argc, char* argv[]) {
 		{
 			const auto element{ FindElementByXPath(seleniumUrl, sessionId, LoadKey(cmd.target)) };
 			CheckKey(seleniumUrl, sessionId, element, cmd);
+		};
+	actions["clean"] = [&](const Command& cmd) {
+		ClearElement(seleniumUrl, sessionId, LoadKey(cmd.target));
 		};
 	actions["waitp"] = [&](const Command& cmd)
 		{
@@ -551,8 +572,8 @@ int main(int argc, char* argv[]) {
 
 		actions["printsn"] = [&](const Command& cmd)
 			{
-				const auto testName{storage.at(sTestName)};
-				Logger::Log(Logger::Level::Info, std::string(scriptPath) + ": "+testName + "|>>>" + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+				const auto testName{ storage.at(sTestName) };
+				Logger::Log(Logger::Level::Info, std::string(scriptPath) + ": " + testName + "|>>>" + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
 			};
 
 		for (const auto& cmd : script)

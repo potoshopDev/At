@@ -225,7 +225,7 @@ bool CheckXPath(const std::string& key)
 }
 bool CheckKey(const std::string& key)
 {
-	return key.starts_with("@@");
+	return key.starts_with("__");
 }
 std::string LoadKey(const std::string& key)
 {
@@ -561,7 +561,7 @@ int main(int argc, char* argv[]) {
 
 	const auto firstScript{ 1 };
 	const auto lastScript{ argc < 2 ? 2 : argc };
-	const auto sTestName{ "@@Имя теста" };
+	const auto sTestName{ "__Имя теста" };
 	storage[sTestName] = "NONE";
 
 	for (const auto& i : std::views::iota(firstScript, lastScript))

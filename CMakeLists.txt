@@ -21,6 +21,7 @@ set (SOURCES src/main.cpp
 	src/winsystem.cpp
 	src/scanelements.cpp
 	src/json.cpp
+	src/runTest.cpp
 	)
 set (HEADER 
 	src/screenshot.h
@@ -29,6 +30,7 @@ set (HEADER
 	src/winsystem.h
 	src/scanelements.h
 	src/json.h
+	src/runTest.h
 )
 
 source_group("Source files/Source" FILES ${SOURCES}) 

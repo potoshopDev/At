@@ -1,29 +1,28 @@
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
-#include <curl/curl.h>
 
 #include <fstream>
-#include <vector>
 #include <sstream>
+#include <vector>
 
-#include <map>
-#include <unordered_map>
 #include <functional>
+#include <map>
 #include <ranges>
-#include <print>
+#include <unordered_map>
 
-#include <string_view>
 #include <algorithm>
 #include <cctype>
+#include <string_view>
 
-#include "screenshot.h"
-#include "Logger.h"
 #include "GetDate.h"
-#include "winsystem.h"
-#include "scanelements.h"
 #include "json.h"
+#include "Logger.h"
+#include "scanelements.h"
+#include "screenshot.h"
+#include "winsystem.h"
 
+#include "runTest.h"
 
 
 // ------------------- Wait for page load -------------------
@@ -249,7 +248,7 @@ void CheckKey(const std::string& seleniumUrl, const std::string& sessionId, cons
 	const auto current{ LoadKey(cmd.value) };
 
 	if (actual == current)
-		Logger::Log(Logger::Level::Info, "Поле: " + cmd.target + " имеет ожидаемое значение: " + current);
+		Logger::Log(Logger::Level::Success, "Поле: " + cmd.target + " имеет ожидаемое значение: " + current);
 	else
 		throw std::runtime_error("Проверка не прошла: у элемента " + cmd.target + " ожидалось:" + current + " - текущие:" + actual);
 
@@ -372,7 +371,7 @@ void wait_until_date(const std::string& seleniumUrl, const std::string& sessionI
 
 		const auto msg{ std::format("Жду до указанной даты (секунд: {})...",
 			std::chrono::duration_cast<std::chrono::seconds>(diff).count()) };
-		Logger::Log(Logger::Level::Info, msg);
+		Logger::Log(Logger::Level::Success, msg);
 
 		Logger::SetLogger(false);
 
@@ -409,12 +408,41 @@ void ClearElement(const std::string& baseUrl, const std::string& sessionId, cons
 		Logger::Log(Logger::Level::Error, "Ответ при очистке поля пустой: " + xpath);
 	}
 }
+void StopTest()
+{
+	// Завершаем процессы Chrome WebDriver
+	auto chromePids = FindProcess(L"chrome.exe");
+	for (auto pid : chromePids) {
+		std::cout << std::format("kill Chrome PID={}", pid) << std::endl;
+		KillProcess(pid);
+	}
+	auto chromeDrivePids = FindProcess(L"chromedriver.exe");
+	for (auto pid : chromeDrivePids) {
+		std::cout << std::format("kill Chrome Driver PID={}", pid) << std::endl;
+		KillProcess(pid);
+	}
+
+
+	// Завершаем Selenium сервер (java)
+	auto javaPids = FindProcess(L"java.exe");
+	for (auto pid : javaPids) {
+		std::cout << std::format("kill Selenium (java) PID={}\n", pid);
+		KillProcess(pid);
+	}
+}
 // ------------------- Main -------------------
 int main(int argc, char* argv[]) {
-	Logger::Init();
 	setlocale(LC_ALL, "ru_RU.UTF-8");
+	Logger::Init();
 
+	// Запускаем Selenium сервер
+	std::wstring startCmd = L"cmd /c start RunTest\\selenium\\startSeleniumServer.bat";
+	_wsystem(startCmd.c_str());
 
+	// Ждём 4 секунды пока поднимется сервер
+	std::this_thread::sleep_for(std::chrono::seconds(5));
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	const std::string seleniumUrl = "http://localhost:4444";
 
 	// 1. Создаём сессию Chrome
@@ -457,7 +485,7 @@ int main(int argc, char* argv[]) {
 			WaitForPageLoad(seleniumUrl, sessionId, timeout);
 
 			const auto msg{ std::format("Ожидание загрузки страницы завершено (таймаут {}мс", timeout) };
-			Logger::Log(Logger::Level::Info, msg);
+			Logger::Log(Logger::Level::Success, msg);
 		};
 	actions["waitd"] = [&](const Command& cmd)
 		{
@@ -520,6 +548,10 @@ int main(int argc, char* argv[]) {
 		{
 			Logger::Log(Logger::Level::Info, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
 		};
+	actions["prints"] = [&](const Command& cmd)
+		{
+			Logger::Log(Logger::Level::Success, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+		};
 	actions["printw"] = [&](const Command& cmd)
 		{
 			Logger::Log(Logger::Level::Warn, LoadKey(cmd.target) + " " + LoadKey(cmd.value));
@@ -554,20 +586,20 @@ int main(int argc, char* argv[]) {
 			Scan::LogInteractiveElements(seleniumUrl, sessionId);
 		};
 
-	if (argc < 2) {
-		const auto msg{ std::format("Внимание: не указан путь к файлу со сценарием.\nПример: ./app script.txt\nБудет использовать стандартный сценарий!") };
-		Logger::Log(Logger::Level::Info, msg);
-	}
+	if (argc < 1)
+		LOG_ERROR("Внимание: не указан путь к папке с тестами.\nПример : .\\At.exe RunTest\\smoke\n");
 
-	const auto firstScript{ 1 };
-	const auto lastScript{ argc < 2 ? 2 : argc };
+
 	const auto sTestName{ "__Имя теста" };
 	storage[sTestName] = "NONE";
 
-	for (const auto& i : std::views::iota(firstScript, lastScript))
+	const auto scriptsPath{ GetTest(argv[1]) };
+	const auto mm = std::accumulate(scriptsPath.begin(), scriptsPath.end(), std::string("Start: "), [](const std::string& a, const std::string& b) {return a + " " + b;});
+	LOG_INFO(mm);
+
+	for (const auto& scriptPath : scriptsPath)
 	{
 
-		const auto scriptPath = argc < 2 ? "script.txt" : argv[i];
 		const auto script = LoadScript(scriptPath);
 
 		actions["printsn"] = [&](const Command& cmd)
@@ -595,6 +627,8 @@ int main(int argc, char* argv[]) {
 					CaptureFullScreenAndSave();
 					Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
 					Logger::Log(Logger::Level::Info, "------------------------------------------------");
+
+					StopTest();
 					return 1;
 				}
 			}
@@ -603,11 +637,12 @@ int main(int argc, char* argv[]) {
 				Logger::Log(Logger::Level::Error, "Неизвестная команда: " + cmd.action);
 			}
 		}
-		Logger::Log(Logger::Level::Info, "Сценарий завершен: " + std::string(scriptPath));
-
+		Logger::Log(Logger::Level::Success, "Сценарий завершен: " + std::string(scriptPath));
 	}
 
 	Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);
-	Logger::Log(Logger::Level::Info, "\n\n\t!!!!!!!!!Автотесты завершены!!!!!!!!!!!!");
+	Logger::Log(Logger::Level::Success, "\n\n\t!!!!!!!!!Автотесты завершены!!!!!!!!!!!!");
+
+	StopTest();
 }
 

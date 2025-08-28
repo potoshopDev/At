@@ -6,6 +6,7 @@ namespace Logger {
 
 	enum class Level {
 		Info,
+		Success,
 		Warn,
 		Error
 	};
@@ -17,5 +18,6 @@ namespace Logger {
 }
 
 #define LOG_INFO(msg) Logger::Log(Logger::Level::Info, msg)
+#define LOG_SUCCEC(msg) Logger::Log(Logger::Level::Success msg)
 #define LOG_WARN(msg) Logger::Log(Logger::Level::Warn, msg)
 #define LOG_ERROR(msg) Logger::Log(Logger::Level::Error, msg)

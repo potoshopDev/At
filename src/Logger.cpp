@@ -7,94 +7,99 @@
 #include <filesystem>
 #include <print>
 #include <mutex>
+#include <memory>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
 #include "winsystem.h"
 
-
 #include <string>
 #include <locale>
 #include <codecvt>
 
 namespace Logger {
-	inline std::ofstream logFile;
-	inline std::mutex logMutex;
-	inline bool isLoggerOn{ true };
+    inline void closeFile(std::ofstream* file)
+    {
+        if (file->is_open()) {
+            file->close();
+        }
+        delete file;
+    }
 
+    using uniq_file = std::unique_ptr<std::ofstream, void(*)(std::ofstream*)>;
+    uniq_file logFile(nullptr, closeFile);
+    inline std::mutex logMutex;
+    inline bool isLoggerOn{ true };
 
-	std::string CurrentTimestamp() {
-		auto now = std::chrono::system_clock::now();
-		auto in_time_t = std::chrono::system_clock::to_time_t(now);
-		struct tm buf;
-		localtime_s(&buf, &in_time_t);
-		return std::format("{:02}-{:02}-{:04} {:02}:{:02}", buf.tm_mday, buf.tm_mon + 1, buf.tm_year + 1900, buf.tm_hour, buf.tm_min);
-	}
+    std::string CurrentTimestamp() {
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+        struct tm buf;
+        localtime_s(&buf, &in_time_t);
+        return std::format("{:02}-{:02}-{:04} {:02}:{:02}", buf.tm_mday, buf.tm_mon + 1, buf.tm_year + 1900, buf.tm_hour, buf.tm_min);
+    }
 
-	std::string LevelToString(Level lvl) {
-		switch (lvl) {
-		case Level::Info: return "info";
-		case Level::Warn: return "warn";
-		case Level::Error: return "error";
-		}
-		return "unknown";
-	}
+    std::string LevelToString(Level lvl) {
+        switch (lvl) {
+        case Level::Info: return "info";
+        case Level::Success: return "success";
+        case Level::Warn: return "warn";
+        case Level::Error: return "error";
+        }
+        return "unknown";
+    }
 
-	std::string LevelToColor(Level lvl) {
-		switch (lvl) {
-		case Level::Info: return "\033[32m";
-		case Level::Warn: return "\033[33m";
-		case Level::Error: return "\033[31m";
-		}
-		return "\033[0m";
-	}
+    std::string LevelToColor(Level lvl) {
+        switch (lvl) {
+        case Level::Success: return "\033[32m";
+        case Level::Warn: return "\033[33m";
+        case Level::Error: return "\033[31m";
+        }
+        return "\033[0m";
+    }
 
-	void Init() {
-		namespace fs = std::filesystem;
+    void Init() {
+        namespace fs = std::filesystem;
 
-		const auto fullPathToApp{ win::getFullPath("") };
-		const auto pathToLogFolder{ fullPathToApp / L"log" };
+        const auto fullPathToApp{ win::getFullPath("") };
+        const auto pathToLogFolder{ fullPathToApp / L"log" };
 
-		fs::create_directories(pathToLogFolder);
+        fs::create_directories(pathToLogFolder);
 
-		const auto fullPathToLog{pathToLogFolder / L"log.log"};
+        const auto fullPathToLog{ pathToLogFolder / L"log.log" };
 
-		// Открываем файл в бинарном режиме и записываем BOM для UTF-8
-		logFile.open(fullPathToLog, std::ios::app | std::ios::binary);
-		if (!logFile.is_open()) {
-			throw std::runtime_error("Не удалось открыть файл лога");
-		}
+        logFile = uniq_file(
+            new std::ofstream(fullPathToLog, std::ios::app | std::ios::binary),
+            closeFile
+        );
+        if (!logFile->is_open())
+            throw std::runtime_error("Не удалось открыть файл лога");
 
-		// Если файл пустой, записываем BOM
-		logFile.seekp(0, std::ios::end);
-		if (logFile.tellp() == 0) {
-			const unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
-			logFile.write(reinterpret_cast<const char*>(bom), sizeof(bom));
-		}
+        // По умолчанию используем чистый UTF-8 (без BOM)
 
-		SetConsoleOutputCP(CP_UTF8);
-	}
+        SetConsoleOutputCP(CP_UTF8);
+    }
 
-	void SetLogger(bool value)
-	{
-		isLoggerOn = value;
-	}
+    void SetLogger(bool value)
+    {
+        isLoggerOn = value;
+    }
 
-	void Log(Level lvl, const std::string& message) {
-		if (!isLoggerOn) return;
+    void Log(Level lvl, const std::string& message) {
+        if (!isLoggerOn) return;
 
-		std::lock_guard guard(logMutex);
-		auto ts = CurrentTimestamp();
-		auto lvlStr = LevelToString(lvl);
-		auto color = LevelToColor(lvl);
-		auto formatted = "[" + ts + "] <" + lvlStr + "> " + message;
+        std::lock_guard guard(logMutex);
+        const auto ts = CurrentTimestamp();
+        const auto lvlStr = LevelToString(lvl);
+        const auto color = LevelToColor(lvl);
+        const auto formatted = "[" + ts + "] <" + lvlStr + "> " + message;
 
-		// В файл
-		logFile << formatted << "\n";
-		logFile.flush();
+        // В файл (чистый UTF-8)
+        *logFile << formatted << "\n";
+        logFile->flush();
 
-		// В консоль
-		std::cout << color << formatted << "\033[0m" << std::endl;
-	}
+        // В консоль
+        std::print("{}{}\033[0m\n", color, formatted);
+    }
 }

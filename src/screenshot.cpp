@@ -54,7 +54,7 @@ void CaptureFullScreenAndSave()
 
 	namespace fs = std::filesystem;
 
-	const auto fullPathToApp{ win::getFullPath("") };
+	const auto fullPathToApp{ win::getFullPath(L"") };
 	const auto pathToScreenshots{ fullPathToApp / L"log" / L"screenshots" };
 
 	fs::create_directories(pathToScreenshots);

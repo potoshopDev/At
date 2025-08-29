@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string_view>
+#include <source_location>
 
 #include "GetDate.h"
 #include "json.h"
@@ -89,25 +90,6 @@ struct Command {
 	std::string value;
 };
 
-std::vector<Command> LoadScript(const std::string& filename) {
-	std::vector<Command> commands;
-
-	namespace fs = std::filesystem;
-	const auto fullPathToFile{ win::getFullPath(filename) };
-
-	std::ifstream file(fullPathToFile);
-	std::string line;
-	while (std::getline(file, line)) {
-		std::istringstream ss(line);
-		Command cmd;
-		std::getline(ss, cmd.action, '|');
-		std::getline(ss, cmd.target, '|');
-		std::getline(ss, cmd.value);
-		commands.push_back(cmd);
-	}
-	return commands;
-}
-
 std::string CleanText(std::string s) {
 	// Заменяем HTML-последовательность &nbsp; на обычный пробел
 	constexpr std::string_view nbsp = "&nbsp;";
@@ -143,6 +125,66 @@ std::string CleanText(std::string s) {
 
 	return std::string(first, last);
 }
+std::string CleanTextUtf8(std::string s) {
+
+    // Заменяем HTML &nbsp; на обычный пробел
+    constexpr std::string_view nbsp = "&nbsp;";
+    for (std::size_t pos{};
+         (pos = s.find(nbsp, pos)) != std::string::npos;) {
+        s.replace(pos, nbsp.size(), " ");
+        pos += 1;
+    }
+
+    // Заменяем неразрывный пробел (U+00A0 → " ")
+    for (std::size_t pos{};
+         (pos = s.find("\xC2\xA0", pos)) != std::string::npos;) {
+        s.replace(pos, 2, " ");
+        pos += 1;
+    }
+
+    // Функция проверки "мусора"
+    auto is_junk = [](unsigned char c) {
+        return (c != ' ') && std::isspace(c); 
+        // удаляем только табы, \r, \n и т.п., но НЕ пробел 0x20
+    };
+
+    // убираем мусор слева
+    auto first = std::find_if_not(s.begin(), s.end(), is_junk);
+    // убираем мусор справа
+    auto last = std::find_if_not(s.rbegin(), s.rend(), is_junk).base();
+
+    if (first >= last) {
+        return {}; // строка вся пустая/мусор
+    }
+
+    return std::string(first, last);
+}
+std::vector<Command> LoadScript(const std::string& filename) {
+	std::vector<Command> commands;
+
+	namespace fs = std::filesystem;
+	const auto u8path{ fs::u8path(filename) };
+
+	const fs::path fullPathToFile{ win::getFullPath2(u8path) };
+
+	std::ifstream file(fullPathToFile, std::ios::binary);
+	if (!file.is_open()) LOG_ERROR(std::format("Не удалось открыть файл  {}", fullPathToFile.generic_string()));
+
+	std::string line;
+	while (std::getline(file, line)) {
+		std::istringstream ss(line);
+		Command cmd;
+		std::getline(ss, cmd.action, '|');
+		std::getline(ss, cmd.target, '|');
+		std::getline(ss, cmd.value);
+		cmd.value = CleanTextUtf8(cmd.value);
+		cmd.target = CleanTextUtf8(cmd.target);
+		cmd.action = CleanTextUtf8(cmd.action);
+		commands.push_back(cmd);
+	}
+	return commands;
+}
+
 void Navigate(const std::string& seleniumUrl, const std::string& sessionId, const std::string& targetUrl, const std::string& path, const int timeout_ms = 10000)
 {
 	Logger::Log(Logger::Level::Info, "Перехожу по URL " + targetUrl);
@@ -275,7 +317,9 @@ int GetTimeout(const Command& cmd)
 	try {
 		const auto value{ LoadKey(cmd.value) };
 		if (!value.empty())
+		{
 			timeout = std::stoi(value);
+		}
 	}
 	catch (...) {
 		throw std::runtime_error("Некорректное значение таймаута: " + cmd.value);
@@ -432,27 +476,35 @@ void StopTest()
 	}
 }
 // ------------------- Main -------------------
-int main(int argc, char* argv[]) {
-	setlocale(LC_ALL, "ru_RU.UTF-8");
+int wmain(int argc, wchar_t* argv[]) {
+
+	//std::this_thread::sleep_for(std::chrono::seconds(10));
+	//setlocale(LC_ALL, "ru_RU.UTF-8");
 	Logger::Init();
 
 	const auto start{ 1 };
 	const auto end{ argc };
-	std::string pathToSelenium{ "RunTest\\selenium\\" };
-	std::string waitTimeToStart{ "5" };
+
+	std::wstring pathToSelenium{ L"RunTest\\selenium\\" };
+	std::wstring waitTimeToStart{ L"5" };
 	std::vector<std::string> scriptsPath;
 
-	const auto copyString = [](const std::string& s) {return s.substr(3); };
+	const auto copyString = [](const std::wstring& s) {return s.substr(3); };
+
+	const auto fullPathToApp{ win::getFullPath(L"") };
+	auto fullPathToSelenium{ fullPathToApp / pathToSelenium / L"startSeleniumServer.bat" };
 
 	try
 	{
 		for (const auto i : std::ranges::iota_view(start, end))
 		{
-			const auto tmp{ std::string(argv[i]) };
-			if (tmp.starts_with("-w=") || tmp.starts_with("-t="))
+			const auto tmp{ std::wstring(argv[i]) };
+
+
+			if (tmp.starts_with(L"-w=") || tmp.starts_with(L"-t="))
 				waitTimeToStart = copyString(tmp);
-			else if (tmp.starts_with("-s="))
-				pathToSelenium = copyString(tmp);
+			else if (tmp.starts_with(L"-s="))
+				fullPathToSelenium = fullPathToApp / tmp.substr(3) / L"startSeleniumServer.bat";
 			else
 			{
 				const auto tmpTest{ GetTest(tmp) };
@@ -461,8 +513,6 @@ int main(int argc, char* argv[]) {
 
 		}
 
-		const auto fullPathToApp{ win::getFullPath("") };
-		const auto fullPathToSelenium{ fullPathToApp / pathToSelenium / "startSeleniumServer.bat" };
 
 		const auto startCmd{ L"cmd /c start " + fullPathToSelenium.generic_wstring() };
 
@@ -475,7 +525,7 @@ int main(int argc, char* argv[]) {
 	}
 	catch (const std::exception& e)
 	{
-		LOG_ERROR(std::format("Ошибка: {}", e.what()));
+		LOG_ERROR(std::format("Ошибка: {} ", e.what()));
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -598,13 +648,15 @@ int main(int argc, char* argv[]) {
 		};
 	actions["getd"] = [&](const Command& cmd)
 		{
-			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
+			const auto tmp{ CleanText(cmd.value) };
+			const auto dateAdjustment{ tmp.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getDMY(dateAdjustment) };
 			SaveKey(rdate, cmd.target, SaveToStorage);
 		};
 	actions["geth"] = [&](const Command& cmd)
 		{
-			const auto dateAdjustment{ cmd.value.empty() ? 0 : GetTimeout(cmd) };
+			const auto tmp{ CleanText(cmd.value) };
+			const auto dateAdjustment{ tmp.empty() ? 0 : GetTimeout(cmd) };
 			const auto rdate{ Date::getHM(dateAdjustment) };
 			SaveKey(rdate, cmd.target, SaveToStorage);
 		};
@@ -636,7 +688,7 @@ int main(int argc, char* argv[]) {
 		actions["printsn"] = [&](const Command& cmd)
 			{
 				const auto testName{ storage.at(sTestName) };
-				Logger::Log(Logger::Level::Info, std::string(scriptPath) + ": " + testName + "|>>>" + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
+				Logger::Log(Logger::Level::Info, scriptPath + ": " + testName + "|>>>" + LoadKey(cmd.target) + " " + LoadKey(cmd.value));
 			};
 
 		for (const auto& cmd : script)
@@ -668,7 +720,7 @@ int main(int argc, char* argv[]) {
 				Logger::Log(Logger::Level::Error, "Неизвестная команда: " + cmd.action);
 			}
 		}
-		Logger::Log(Logger::Level::Success, "Сценарий завершен: " + std::string(scriptPath));
+		Logger::Log(Logger::Level::Success, "Сценарий завершен: " + scriptPath);
 	}
 
 	Logger::Log(Logger::Level::Info, "Session ID: " + sessionId);

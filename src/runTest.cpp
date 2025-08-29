@@ -45,14 +45,14 @@ bool KillProcess(DWORD pid) {
     return result;
 }
 
-std::vector<std::string> GetTest(const std::string& argv)
+std::vector<std::string> GetTest(const std::wstring& argv)
 {
 	fs::path scriptsDir = argv;
 
 	// Читаем все .txt файлы
 	std::vector<std::string> args;
 	for (auto& p : fs::recursive_directory_iterator(scriptsDir)) {
-		if (p.is_regular_file() && p.path().extension() == ".txt") {
+		if (p.is_regular_file() && p.path().extension() == L".txt") {
 			std::ifstream in(p.path());
 			std::string line;
 			while (std::getline(in, line)) {

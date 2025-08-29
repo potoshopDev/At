@@ -11,4 +11,4 @@ std::vector<DWORD> FindProcess(const std::wstring& processName);
 // Завершает процесс по PID
 bool KillProcess(DWORD pid);
 
-std::vector<std::string> GetTest(const std::string& argv);
+std::vector<std::string> GetTest(const std::wstring& argv);

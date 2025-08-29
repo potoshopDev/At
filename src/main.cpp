@@ -10,6 +10,7 @@
 #include <map>
 #include <ranges>
 #include <unordered_map>
+#include <numeric>
 
 #include <algorithm>
 #include <cctype>
@@ -224,7 +225,7 @@ bool CheckXPath(const std::string& key)
 }
 bool CheckKey(const std::string& key)
 {
-	return key.starts_with("__");
+	return key.starts_with("__") || key.starts_with("@@");
 }
 std::string LoadKey(const std::string& key)
 {
@@ -435,12 +436,47 @@ int main(int argc, char* argv[]) {
 	setlocale(LC_ALL, "ru_RU.UTF-8");
 	Logger::Init();
 
-	// Запускаем Selenium сервер
-	std::wstring startCmd = L"cmd /c start RunTest\\selenium\\startSeleniumServer.bat";
-	_wsystem(startCmd.c_str());
+	const auto start{ 1 };
+	const auto end{ argc };
+	std::string pathToSelenium{ "RunTest\\selenium\\" };
+	std::string waitTimeToStart{ "5" };
+	std::vector<std::string> scriptsPath;
 
-	// Ждём 4 секунды пока поднимется сервер
-	std::this_thread::sleep_for(std::chrono::seconds(5));
+	const auto copyString = [](const std::string& s) {return s.substr(3); };
+
+	try
+	{
+		for (const auto i : std::ranges::iota_view(start, end))
+		{
+			const auto tmp{ std::string(argv[i]) };
+			if (tmp.starts_with("-w=") || tmp.starts_with("-t="))
+				waitTimeToStart = copyString(tmp);
+			else if (tmp.starts_with("-s="))
+				pathToSelenium = copyString(tmp);
+			else
+			{
+				const auto tmpTest{ GetTest(tmp) };
+				scriptsPath.insert(scriptsPath.end(), tmpTest.begin(), tmpTest.end());
+			}
+
+		}
+
+		const auto fullPathToApp{ win::getFullPath("") };
+		const auto fullPathToSelenium{ fullPathToApp / pathToSelenium / "startSeleniumServer.bat" };
+
+		const auto startCmd{ L"cmd /c start " + fullPathToSelenium.generic_wstring() };
+
+		// Запускаем Selenium сервер
+		//std::wstring startCmd = L"cmd /c start RunTest\\selenium\\startSeleniumServer.bat";
+		_wsystem(startCmd.c_str());
+
+		// Ждём пока поднимется сервер
+		std::this_thread::sleep_for(std::chrono::seconds(std::stoi(waitTimeToStart)));
+	}
+	catch (const std::exception& e)
+	{
+		LOG_ERROR(std::format("Ошибка: {}", e.what()));
+	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	const std::string seleniumUrl = "http://localhost:4444";
@@ -586,15 +622,10 @@ int main(int argc, char* argv[]) {
 			Scan::LogInteractiveElements(seleniumUrl, sessionId);
 		};
 
-	if (argc < 1)
-		LOG_ERROR("Внимание: не указан путь к папке с тестами.\nПример : .\\At.exe RunTest\\smoke\n");
-
-
 	const auto sTestName{ "__Имя теста" };
 	storage[sTestName] = "NONE";
 
-	const auto scriptsPath{ GetTest(argv[1]) };
-	const auto mm = std::accumulate(scriptsPath.begin(), scriptsPath.end(), std::string("Start: "), [](const std::string& a, const std::string& b) {return a + " " + b;});
+	const auto mm = std::accumulate(scriptsPath.begin(), scriptsPath.end(), std::string("Start: "), [](const std::string& a, const std::string& b) {return a + " " + b; });
 	LOG_INFO(mm);
 
 	for (const auto& scriptPath : scriptsPath)

@@ -12,3 +12,4 @@ std::vector<DWORD> FindProcess(const std::wstring& processName);
 bool KillProcess(DWORD pid);
 
 std::vector<std::string> GetTest(const std::wstring& argv);
+

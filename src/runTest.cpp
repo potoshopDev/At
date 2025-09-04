@@ -46,46 +46,28 @@ bool KillProcess(DWORD pid) {
 	return result;
 }
 
-void _GetTest(const fs::path scriptsDir, std::vector < std::string>& args)
+void _recursiveGetTest(const std::filesystem::path& scriptsDir, std::vector<std::string>& args)
 {
-
-	// Читаем все .txt файлы
 	for (auto& p : fs::recursive_directory_iterator(scriptsDir)) {
 		if (p.is_regular_file() && p.path().extension() == L".txt") {
 			std::ifstream in(p.path());
 			std::string line;
 			while (std::getline(in, line)) {
 				if (line.starts_with("!"))
-				{
-					_GetTest(line.substr(1), args);
-				}
+					_recursiveGetTest(fs::u8path(line.substr(1)), args);
 				else
 					args.emplace_back(line);
 			}
 		}
 	}
-
 }
+
 std::vector<std::string> GetTest(const std::wstring& argv)
 {
 	fs::path scriptsDir = argv;
 
-	// Читаем все .txt файлы
 	std::vector<std::string> args;
-	for (auto& p : fs::recursive_directory_iterator(scriptsDir)) {
-		if (p.is_regular_file() && p.path().extension() == L".txt") {
-			std::ifstream in(p.path());
-			std::string line;
-			while (std::getline(in, line)) {
-				if (line.starts_with("!"))
-				{
-					_GetTest(fs::u8path(line.substr(1)), args);
-				}
-				else
-					args.emplace_back(line);
-			}
-		}
-	}
+	_recursiveGetTest(scriptsDir, args);
 
 	return args;
 }
